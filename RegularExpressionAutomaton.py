@@ -28,17 +28,12 @@ class MyDFA:
                     clazzes_dict.update({clazz: {state}})
                 else:
                     clazzes_dict[clazz].add(state)
-            new_equiv_classes = list()
+            new_equiv_classes = [set() for i in range(len(clazzes_dict.keys()))]
             new_symbol_classes = dict()
-            clazzes = sorted(list(clazzes_dict.keys()))
-            i = 0
-            while i < len(clazzes):
-                delegate = clazzes[i]
-                for state in clazzes_dict[delegate]:
-                    new_symbol_classes.update({state: len(new_equiv_classes)})
-                new_equiv_classes.append(clazzes_dict[delegate])
-                while i < len(clazzes) and clazzes[i] == delegate:
-                    i += 1
+            for i, states in enumerate(clazzes_dict.values()):
+                for state in states:
+                    new_symbol_classes.update({state: i})
+                new_equiv_classes[i] = states
             if len(new_equiv_classes) == len(equiv_classes):
                 is_end = True
             equiv_classes = new_equiv_classes
@@ -109,56 +104,46 @@ class MyNFA:
         return new_nfa
 
     @staticmethod
-    def get_from_set_fields_to_int_fields(set_states, final_set_states, set_transitions, alphabet,
+    def get_from_set_fields_to_int_fields(states_sets, final_states_sets, set_transitions, alphabet,
                                           initial_state) -> MyDFA:
         my_dfa = MyDFA()
-        set_states_dict = dict()
-        states_dict = dict()
-        for i in range(len(set_states)):
-            set_state = set_states.pop()
-            my_dfa.states.add(i)
-            if set_state in final_set_states:
-                my_dfa.final_states.add(i)
-            if initial_state in set_state:
-                my_dfa.initial_state = i
-            states_dict.update({i: set_state})
-            set_states_dict.update({set_state: i})
-        for i in range(len(my_dfa.states)):
-            my_dfa.transitions.update({i: dict()})
-            for symbol in alphabet:
-                my_dfa.transitions[i].update({symbol: set_states_dict[set_transitions[states_dict[i]][symbol]]})
+        states_sets_dict = {states_set: i for i, states_set in enumerate(states_sets)}
+        my_dfa.initial_state = states_sets_dict.get(frozenset([initial_state]))
+        my_dfa.states = set(states_sets_dict.values())
+        for set_state in final_states_sets:
+            my_dfa.final_states.add(states_sets_dict[set_state])
+        my_dfa.transitions = {i: {symbol: states_sets_dict[set_transitions[states_set][symbol]] for symbol in alphabet}
+                              for states_set, i in states_sets_dict.items()}
         my_dfa.input_symbols = alphabet
         return my_dfa
 
     def determinization(self) -> MyDFA:
-        set_states = {frozenset([self.initial_state])}
-        final_set_states = set()
+        states_sets = {frozenset([self.initial_state])}
+        final_states_sets = set()
         set_transitions = dict()
         queue = Queue()
         queue.put(frozenset([self.initial_state]))
         while not queue.empty():
-            tops_set = queue.get()
-            set_transitions.update({tops_set: dict()})
+            vertices_set = queue.get()
+            set_transitions.update({vertices_set: dict()})
             for symbol in self.input_symbols:
-                new_tops_set = set()
+                new_vertices_set = set()
                 is_terminal = False
-                for top in tops_set - {-1}:
-                    if symbol in self.transitions[top]:
-                        for vertex in self.transitions[top][symbol]:
-                            if vertex not in new_tops_set:
-                                new_tops_set.add(vertex)
-                                if vertex in self.final_states:
+                for vertex in vertices_set:
+                    if symbol in self.transitions[vertex]:
+                        for neighbour_vertex in self.transitions[vertex][symbol]:
+                            if neighbour_vertex not in new_vertices_set:
+                                new_vertices_set.add(neighbour_vertex)
+                                if neighbour_vertex in self.final_states:
                                     is_terminal = True
-                new_tops_set = frozenset(new_tops_set)
-                if len(new_tops_set) == 0:
-                    new_tops_set = frozenset([-1])
-                set_transitions[tops_set].update({symbol: new_tops_set})
-                if new_tops_set not in set_states:
-                    set_states.add(new_tops_set)
-                    queue.put(new_tops_set)
+                new_vertices_set = frozenset(new_vertices_set)
+                set_transitions[vertices_set].update({symbol: new_vertices_set})
+                if new_vertices_set not in states_sets:
+                    states_sets.add(new_vertices_set)
+                    queue.put(new_vertices_set)
                     if is_terminal:
-                        final_set_states.add(new_tops_set)
-        return MyNFA.get_from_set_fields_to_int_fields(set_states, final_set_states, set_transitions,
+                        final_states_sets.add(new_vertices_set)
+        return MyNFA.get_from_set_fields_to_int_fields(states_sets, final_states_sets, set_transitions,
                                                        self.input_symbols, self.initial_state)
 
     number_of_state = 0
